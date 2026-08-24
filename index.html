@@ -19,9 +19,9 @@
         <p id="intro" class="intro">Inicie uma sessão privada e compartilhe o acesso com quem você escolher.</p>
       </section>
       <section id="identityBox" class="identity-box">
-        <label for="displayName">Seu nome de transmissão</label>
-        <input id="displayName" maxlength="36" autocomplete="name" placeholder="Ex.: Joe" />
-        <p>Este nome aparecerá na lista de transmissões online.</p>
+        <label for="displayName">Usuário</label>
+        <input id="displayName" maxlength="36" autocomplete="name" placeholder="Luix" />
+        <p>Este nome identifica você nas transmissões e na lista online.</p>
       </section>
       <section class="stage">
         <div id="emptyState" class="empty-state">
@@ -44,8 +44,14 @@
         <p class="hint">Seu link é fixo e pode ser usado em todas as suas transmissões.</p>
       </section>
       <aside class="online-panel" aria-label="Transmissões online">
-        <p class="eyebrow">ONLINE AGORA</p>
-        <ul id="onlineList" class="online-list"><li>Nenhuma transmissão ativa.</li></ul>
+        <div class="online-column">
+          <p class="eyebrow">ONLINE AGORA</p>
+          <ul id="onlineList" class="online-list"><li>Nenhuma transmissão ativa.</li></ul>
+        </div>
+        <div id="watchingPanel" class="online-column" hidden>
+          <p class="eyebrow">ASSISTINDO AGORA</p>
+          <ul id="watcherList" class="online-list"><li>Ninguém assistindo.</li></ul>
+        </div>
       </aside>
       <footer>Criado por Luiz Carlos</footer>
     </main>
