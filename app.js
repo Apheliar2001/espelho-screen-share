@@ -25,6 +25,15 @@ function stage(text) { $('stageMessage').textContent = text; }
 function setRoleStatus(role, state, positive) { const banner = $('roleBanner'); banner.textContent = `${role} · ${state}`; banner.className = `role-banner ${positive ? 'positive' : 'negative'}`; }
 function fixedLink(id = hostId) { return `${location.origin}${location.pathname}?stream=${id}`; }
 function setLink() { $('roomLink').textContent = fixedLink(); $('copyButton').disabled = false; }
+function updateStreamOwner(streams) {
+  if (!isViewer) return;
+  const owner = streams.find((stream) => stream.id === streamId);
+  const cacheKey = `apheliar-screen-owner-${streamId}`;
+  if (owner) localStorage.setItem(cacheKey, owner.name);
+  const name = owner?.name || localStorage.getItem(cacheKey);
+  $('streamOwner').hidden = !name;
+  if (name) $('streamOwner').textContent = `Transmissão de: ${name}`;
+}
 function renderOnline(streams) {
   const list = $('onlineList'); list.replaceChildren();
   if (!streams.length) { const item = document.createElement('li'); item.textContent = 'Nenhuma transmissão ativa.'; list.append(item); return; }
@@ -62,7 +71,7 @@ function invalidate(message) {
   status('Link expirado', 'warning'); stage(message);
 }
 async function receiveSignal(message) {
-  if (message.type === 'online-streams') { renderOnline(message.streams); if (isViewer) joinCurrentStream(); return; }
+  if (message.type === 'online-streams') { renderOnline(message.streams); updateStreamOwner(message.streams); if (isViewer) joinCurrentStream(); return; }
   if (message.type === 'watchers' && !isViewer) { $('watchingPanel').hidden = false; renderWatchers(message.viewers); return; }
   if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; $('watchingPanel').hidden = false; renderWatchers([]); setRoleStatus('TRANSMISSOR', 'ATIVO', true); $('stageTitle').textContent = 'Transmissão disponível'; setLink(); status('Transmissor ativo', 'connected'); stage('Seu link fixo está online para os receptores.'); return; }
   if (message.type === 'joined') { joiningStream = false; joinedStream = true; $('joinViewerButton').hidden = true; setRoleStatus('RECEPTOR', 'DISPONÍVEL', true); status('Receptor disponível', 'connected'); return; }
