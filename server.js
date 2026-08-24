@@ -19,6 +19,7 @@ function broadcast(roomId, sender, message) {
 }
 function onlineStreams() { return [...streams.entries()].map(([id, stream]) => ({ id, name: stream.name })); }
 function publishOnlineStreams() { for (const client of wss.clients) send(client, { type: 'online-streams', streams: onlineStreams() }); }
+function notifyWatchers(roomId) { const clients = rooms.get(roomId); const host = [...(clients || [])].find((client) => client.isHost); if (host) send(host, { type: 'watchers', viewers: [...clients].filter((client) => !client.isHost).map((client) => client.name || 'Usuário') }); }
 function endStream(hostId) {
   const stream = streams.get(hostId);
   if (!stream) return;
@@ -30,6 +31,7 @@ function removeClient(socket) {
   for (const [roomId, clients] of rooms) {
     if (!clients.delete(socket)) continue;
     broadcast(roomId, socket, { type: 'peer-left', peerId: socket.id });
+    notifyWatchers(roomId);
     if (clients.size === 0) rooms.delete(roomId);
     break;
   }
@@ -78,9 +80,10 @@ wss.on('connection', (socket) => {
         if (!stream) { send(socket, { type: 'stream-unavailable' }); return; }
         const clients = rooms.get(stream.room);
         if (clients.size - 1 >= maxViewers) { send(socket, { type: 'room-full' }); socket.close(); return; }
-        socket.room = stream.room; clients.add(socket);
+        socket.room = stream.room; socket.name = String(message.name || 'Usuário').trim().slice(0, 36) || 'Usuário'; clients.add(socket);
         const host = [...clients].find((client) => client.isHost);
         send(socket, { type: 'joined', peers: clients.size - 1, hostId: host?.id });
+        notifyWatchers(stream.room);
         if (host) send(host, { type: 'peer-joined', peerId: socket.id, viewers: clients.size - 1 });
       } else if (socket.room && rooms.has(socket.room) && ['offer', 'answer', 'ice-candidate'].includes(message.type)) {
         const target = [...(rooms.get(socket.room) || [])].find((client) => client.id === message.to);
