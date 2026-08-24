@@ -17,7 +17,14 @@ function setLink(room) { $('roomLink').textContent = `${location.origin}${locati
 function createPeer() {
   if (peer) peer.close(); peer = new RTCPeerConnection({ iceServers });
   peer.onicecandidate = ({ candidate }) => candidate && signal({ type: 'ice-candidate', candidate });
-  peer.ontrack = ({ streams }) => { $('remoteVideo').srcObject = streams[0]; $('remoteVideo').classList.add('active'); $('emptyState').hidden = true; $('roleBanner').classList.add('watching'); status('Assistindo à transmissão', 'connected'); };
+  peer.ontrack = ({ streams }) => {
+    const video = $('remoteVideo');
+    video.muted = true;
+    video.srcObject = streams[0];
+    video.classList.add('active'); $('emptyState').hidden = true; $('roleBanner').classList.add('watching');
+    video.play().catch(() => { video.onloadedmetadata = () => video.play().catch(() => {}); });
+    status('Assistindo à transmissão', 'connected');
+  };
   peer.onconnectionstatechange = () => { if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') status('Conexão interrompida', 'warning'); };
   if (localStream) localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
 }
