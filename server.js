@@ -43,7 +43,8 @@ function expireActiveSession() {
 }
 
 const server = http.createServer((req, res) => {
-  const requested = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
+  const rawPath = decodeURIComponent(req.url.split('?')[0]);
+  const requested = rawPath === '/' ? '/index.html' : rawPath;
   if (!['/index.html', '/style.css', '/app.js'].includes(requested)) {
     res.writeHead(404); res.end('Not found'); return;
   }
