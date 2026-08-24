@@ -24,6 +24,12 @@
         <p>Este nome identifica você nas transmissões e na lista online.</p>
       </section>
       <section class="stage">
+        <div id="viewerActions" class="viewer-actions" hidden>
+          <button id="joinViewerButton" class="primary" disabled>Entrar na transmissão</button>
+          <button id="unmuteButton" class="secondary" hidden>Ativar som</button>
+          <button id="fullscreenButton" class="secondary" hidden>Tela cheia</button>
+          <button id="openBroadcastButton" class="secondary">Abrir minha transmissão</button>
+        </div>
         <div id="emptyState" class="empty-state">
           <div class="screen-icon">▭</div>
           <h2 id="stageTitle">Preparando sua sala</h2>
@@ -36,11 +42,8 @@
         <div class="link-box"><span id="roomLink">O link será criado quando você iniciar a transmissão.</span><button id="copyButton" class="secondary" disabled>Copiar link</button></div>
         <div class="actions">
           <button id="shareButton" class="primary" disabled>Compartilhar minha tela</button>
-          <button id="joinViewerButton" class="primary" hidden disabled>Entrar na transmissão</button>
           <button id="changeScreenButton" class="secondary" hidden>Alterar tela/janela</button>
           <button id="stopButton" class="danger" hidden>Parar transmissão</button>
-          <button id="unmuteButton" class="secondary" hidden>Ativar som</button>
-          <button id="fullscreenButton" class="secondary" hidden>Tela cheia</button>
         </div>
         <p class="hint">Seu link é fixo e pode ser usado em todas as suas transmissões.</p>
       </section>
