@@ -1,0 +1,12 @@
+{
+  "name": "screen-share-web-prototype",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Protótipo WebRTC de compartilhamento de tela",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

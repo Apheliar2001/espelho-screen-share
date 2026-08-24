@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Espelho — Compartilhe sua tela</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div class="brand"><span class="mark">◫</span> espelho</div>
+        <span id="connectionStatus" class="status neutral">Pronto para transmitir</span>
+      </header>
+      <section class="hero">
+        <p class="eyebrow">TRANSMISSÃO PRIVADA 1:1</p>
+        <h1>Mostre sua tela,<br /><em>sem instalar nada.</em></h1>
+        <p class="intro">Envie o link da sala. A imagem é transmitida diretamente entre os navegadores.</p>
+      </section>
+      <section class="stage">
+        <div id="emptyState" class="empty-state">
+          <div class="screen-icon">▭</div>
+          <h2>Aguardando transmissão</h2>
+          <p id="stageMessage">Inicie uma transmissão para gerar um link de acesso.</p>
+        </div>
+        <video id="remoteVideo" autoplay playsinline></video>
+        <div id="presentingBadge" class="presenting-badge" hidden>● Você está transmitindo</div>
+      </section>
+      <section class="controls">
+        <div class="link-box"><span id="roomLink">O link será criado quando você iniciar a transmissão.</span><button id="copyButton" class="secondary" disabled>Copiar link</button></div>
+        <div class="actions">
+          <button id="shareButton" class="primary">Compartilhar minha tela</button>
+          <button id="stopButton" class="danger" hidden>Parar transmissão</button>
+        </div>
+        <p class="hint">Cada nova transmissão substitui a anterior e invalida seu link. Use Chrome, Edge ou Firefox atualizado.</p>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
