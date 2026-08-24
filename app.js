@@ -17,7 +17,7 @@ function setLink(room) { $('roomLink').textContent = `${location.origin}${locati
 function createPeer() {
   if (peer) peer.close(); peer = new RTCPeerConnection({ iceServers });
   peer.onicecandidate = ({ candidate }) => candidate && signal({ type: 'ice-candidate', candidate });
-  peer.ontrack = ({ streams }) => { $('remoteVideo').srcObject = streams[0]; $('remoteVideo').classList.add('active'); $('emptyState').hidden = true; status('Assistindo à transmissão', 'connected'); };
+  peer.ontrack = ({ streams }) => { $('remoteVideo').srcObject = streams[0]; $('remoteVideo').classList.add('active'); $('emptyState').hidden = true; $('roleBanner').classList.add('watching'); status('Assistindo à transmissão', 'connected'); };
   peer.onconnectionstatechange = () => { if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') status('Conexão interrompida', 'warning'); };
   if (localStream) localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
 }
@@ -25,12 +25,12 @@ function signal(message) { if (socket?.readyState === WebSocket.OPEN) socket.sen
 async function makeOffer() { createPeer(); const offer = await peer.createOffer(); await peer.setLocalDescription(offer); signal({ type: 'offer', sdp: offer }); }
 function invalidate(message) {
   peer?.close(); peer = null; sessionId = null; localStream?.getTracks().forEach(track => track.stop()); localStream = null;
-  $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; $('presentingBadge').hidden = true; $('stopButton').hidden = true;
+  $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; $('presentingBadge').hidden = true; $('stopButton').hidden = true; $('roleBanner').classList.remove('live', 'watching');
   if (!isViewer) { isPresenter = false; $('shareButton').hidden = false; $('shareButton').disabled = false; $('shareButton').textContent = 'Compartilhar minha tela'; $('copyButton').disabled = true; $('roomLink').textContent = 'O link anterior expirou. Inicie outra transmissão para criar um novo.'; }
   status('Link expirado', 'warning'); stage(message);
 }
 async function receiveSignal(message) {
-  if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; setLink(sessionId); status('Link criado — aguardando acesso', 'connected'); stage('Envie o link acima. Ele expira quando a transmissão terminar ou quando outra começar.'); return; }
+  if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; $('roleBanner').classList.add('live'); setLink(sessionId); status('Link criado — aguardando acesso', 'connected'); stage('Envie o link acima. Ele expira quando a transmissão terminar ou quando outra começar.'); return; }
   if (message.type === 'joined') { status(message.peers ? 'Conectando ao transmissor…' : (isPresenter ? 'Aguardando espectador' : 'Aguardando transmissor'), 'neutral'); return; }
   if (message.type === 'peer-joined' && isPresenter) { status('Espectador entrou', 'connected'); await makeOffer(); }
   if (message.type === 'offer') { createPeer(); await peer.setRemoteDescription(message.sdp); const answer = await peer.createAnswer(); await peer.setLocalDescription(answer); signal({ type: 'answer', sdp: answer }); }
