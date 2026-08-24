@@ -2,7 +2,9 @@ const $ = (id) => document.getElementById(id);
 const session = new URLSearchParams(location.search).get('session');
 const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
 const isViewer = Boolean(session);
-let socket, peer, localStream, queuedCandidates = [], sessionId = session, isPresenter = false, sessionCreationTimer;
+let socket, peer, localStream, sessionId = session, isPresenter = false, sessionCreationTimer;
+const peers = new Map();
+const queuedCandidates = new Map();
 let signalReady;
 
 if (isViewer) {
@@ -15,10 +17,12 @@ $('copyButton').onclick = async () => { await navigator.clipboard.writeText($('r
 function status(text, variant = 'neutral') { const el = $('connectionStatus'); el.textContent = text; el.className = `status ${variant}`; }
 function stage(text) { $('stageMessage').textContent = text; }
 function setLink(room) { $('roomLink').textContent = `${location.origin}${location.pathname}?session=${room}`; $('copyButton').disabled = false; }
-function createPeer() {
-  if (peer) peer.close(); peer = new RTCPeerConnection({ iceServers });
-  peer.onicecandidate = ({ candidate }) => candidate && signal({ type: 'ice-candidate', candidate });
-  peer.ontrack = ({ streams }) => {
+function createPeer(peerId) {
+  const previous = peers.get(peerId); if (previous) previous.close();
+  const connection = new RTCPeerConnection({ iceServers }); peers.set(peerId, connection);
+  if (!isPresenter) peer = connection;
+  connection.onicecandidate = ({ candidate }) => candidate && signal({ type: 'ice-candidate', candidate, to: peerId });
+  connection.ontrack = ({ streams }) => {
     const video = $('remoteVideo');
     video.muted = true;
     video.srcObject = streams[0];
@@ -26,26 +30,26 @@ function createPeer() {
     video.play().catch(() => { video.onloadedmetadata = () => video.play().catch(() => {}); });
     status('Assistindo à transmissão', 'connected');
   };
-  peer.onconnectionstatechange = () => { if (peer.connectionState === 'disconnected' || peer.connectionState === 'failed') status('Conexão interrompida', 'warning'); };
-  if (localStream) localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+  connection.onconnectionstatechange = () => { if (connection.connectionState === 'disconnected' || connection.connectionState === 'failed') status('Conexão interrompida', 'warning'); };
+  if (localStream) localStream.getTracks().forEach(track => connection.addTrack(track, localStream));
+  return connection;
 }
 function signal(message) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
-async function makeOffer() { createPeer(); const offer = await peer.createOffer(); await peer.setLocalDescription(offer); signal({ type: 'offer', sdp: offer }); }
+async function makeOffer(peerId) { const connection = createPeer(peerId); const offer = await connection.createOffer(); await connection.setLocalDescription(offer); signal({ type: 'offer', sdp: offer, to: peerId }); }
 function invalidate(message) {
-  peer?.close(); peer = null; sessionId = null; localStream?.getTracks().forEach(track => track.stop()); localStream = null;
+  for (const connection of peers.values()) connection.close(); peers.clear(); peer = null; sessionId = null; localStream?.getTracks().forEach(track => track.stop()); localStream = null;
   $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; $('presentingBadge').hidden = true; $('stopButton').hidden = true; $('fullscreenButton').hidden = true; $('roleBanner').classList.remove('live', 'watching');
   if (!isViewer) { isPresenter = false; $('shareButton').hidden = false; $('shareButton').disabled = false; $('shareButton').textContent = 'Compartilhar minha tela'; $('copyButton').disabled = true; $('roomLink').textContent = 'O link anterior expirou. Inicie outra transmissão para criar um novo.'; }
   status('Link expirado', 'warning'); stage(message);
 }
 async function receiveSignal(message) {
   if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; $('roleBanner').classList.add('live'); $('roleBanner').textContent = 'TRANSMISSOR · AO VIVO'; $('stageTitle').textContent = 'Transmissão disponível'; setLink(sessionId); status('Link criado — aguardando acesso', 'connected'); stage('Envie o acesso acima para o espectador.'); return; }
-  if (message.type === 'joined') { status(message.peers ? 'Conectando ao transmissor…' : (isPresenter ? 'Aguardando espectador' : 'Aguardando transmissor'), 'neutral'); return; }
-  if (message.type === 'peer-joined' && isPresenter) { status('Espectador entrou', 'connected'); await makeOffer(); }
-  if (message.type === 'offer') { createPeer(); await peer.setRemoteDescription(message.sdp); const answer = await peer.createAnswer(); await peer.setLocalDescription(answer); signal({ type: 'answer', sdp: answer }); }
-  if (message.type === 'answer' && peer) await peer.setRemoteDescription(message.sdp);
-  if (message.type === 'ice-candidate' && peer) { if (peer.remoteDescription) await peer.addIceCandidate(message.candidate); else queuedCandidates.push(message.candidate); }
-  if ((message.type === 'offer' || message.type === 'answer') && peer) { for (const candidate of queuedCandidates) await peer.addIceCandidate(candidate); queuedCandidates = []; }
-  if (message.type === 'peer-left') { status('Aguardando outra pessoa', 'neutral'); if (!isPresenter) { $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; stage('O transmissor saiu da sala.'); } }
+  if (message.type === 'joined') { status('Conectando ao transmissor…', 'neutral'); return; }
+  if (message.type === 'peer-joined' && isPresenter) { status(`${message.viewers} espectador(es) conectado(s)`, 'connected'); await makeOffer(message.peerId); }
+  if (message.type === 'offer') { const connection = createPeer(message.from); await connection.setRemoteDescription(message.sdp); const answer = await connection.createAnswer(); await connection.setLocalDescription(answer); signal({ type: 'answer', sdp: answer, to: message.from }); for (const candidate of queuedCandidates.get(message.from) || []) await connection.addIceCandidate(candidate); queuedCandidates.delete(message.from); }
+  if (message.type === 'answer') { const connection = peers.get(message.from); if (connection) { await connection.setRemoteDescription(message.sdp); for (const candidate of queuedCandidates.get(message.from) || []) await connection.addIceCandidate(candidate); queuedCandidates.delete(message.from); } }
+  if (message.type === 'ice-candidate') { const connection = peers.get(message.from); if (connection?.remoteDescription) await connection.addIceCandidate(message.candidate); else queuedCandidates.set(message.from, [...(queuedCandidates.get(message.from) || []), message.candidate]); }
+  if (message.type === 'peer-left') { peers.get(message.peerId)?.close(); peers.delete(message.peerId); status(isPresenter ? `${peers.size} espectador(es) conectado(s)` : 'Aguardando outra pessoa', 'neutral'); if (!isPresenter) { $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; stage('O transmissor saiu da sala.'); } }
   if (message.type === 'session-expired') invalidate('Esta transmissão terminou ou foi substituída por uma nova.');
   if (message.type === 'invalid-session' || message.type === 'room-full') invalidate(message.type === 'room-full' ? 'Esta transmissão já atingiu o limite de espectadores.' : 'Este link expirou ou não é válido.');
 }
