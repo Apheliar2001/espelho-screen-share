@@ -3,6 +3,7 @@ const streamId = new URLSearchParams(location.search).get('stream');
 const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
 const isViewer = Boolean(streamId);
 const hostStorageKey = 'apheliar-screen-host-id';
+const userStorageKey = 'apheliar-screen-user-name';
 const hostId = localStorage.getItem(hostStorageKey) || crypto.randomUUID().replaceAll('-', '');
 localStorage.setItem(hostStorageKey, hostId);
 let socket, peer, localStream, sessionId = null, isPresenter = false, sessionCreationTimer, joinedStream = false, joiningStream = false;
@@ -13,10 +14,10 @@ let signalReady;
 if (isViewer) {
   document.body.classList.add('viewer-mode'); setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false);
   $('eyebrow').textContent = 'RECEPTOR'; $('heroTitle').innerHTML = 'A transmissão<br /><em>vai começar.</em>'; $('intro').textContent = 'Você está na sala de visualização. A imagem aparecerá assim que o transmissor estiver disponível.';
-  $('identityBox').hidden = true; $('shareButton').hidden = true; $('stopButton').hidden = true; $('roomLink').textContent = 'Você está acessando um link fixo de transmissão.'; $('copyButton').hidden = true;
+  $('displayName').value = localStorage.getItem(userStorageKey) || ''; $('shareButton').hidden = true; $('stopButton').hidden = true; $('roomLink').textContent = 'Você está acessando um link fixo de transmissão.'; $('copyButton').hidden = true;
   stage('Aguardando esta transmissão ficar online…');
 } else {
-  $('displayName').value = localStorage.getItem('apheliar-screen-display-name') || '';
+  $('displayName').value = localStorage.getItem(userStorageKey) || '';
 }
 $('copyButton').onclick = async () => { await navigator.clipboard.writeText($('roomLink').textContent); $('copyButton').textContent = 'Copiado!'; setTimeout(() => $('copyButton').textContent = 'Copiar link', 1600); };
 function status(text, variant = 'neutral') { const el = $('connectionStatus'); el.textContent = text; el.className = `status ${variant}`; }
@@ -27,9 +28,11 @@ function setLink() { $('roomLink').textContent = fixedLink(); $('copyButton').di
 function renderOnline(streams) {
   const list = $('onlineList'); list.replaceChildren();
   if (!streams.length) { const item = document.createElement('li'); item.textContent = 'Nenhuma transmissão ativa.'; list.append(item); return; }
-  for (const stream of streams) { const item = document.createElement('li'); const link = document.createElement('a'); link.href = fixedLink(stream.id); link.textContent = stream.name; item.append(link); list.append(item); }
+  for (const stream of streams) { const item = document.createElement('li'); const link = document.createElement('a'); link.href = fixedLink(stream.id); link.target = '_blank'; link.rel = 'noopener'; link.textContent = stream.name; item.append(link); list.append(item); }
 }
-function joinCurrentStream() { if (isViewer && !joinedStream && !joiningStream && socket?.readyState === WebSocket.OPEN) { joiningStream = true; signal({ type: 'join', hostId: streamId }); } }
+function renderWatchers(viewers) { const list = $('watcherList'); list.replaceChildren(); if (!viewers.length) { const item = document.createElement('li'); item.textContent = 'Ninguém assistindo.'; list.append(item); return; } for (const viewer of viewers) { const item = document.createElement('li'); item.textContent = viewer; list.append(item); } }
+function joinCurrentStream() { const name = $('displayName').value.trim(); if (isViewer && !joinedStream && !joiningStream && socket?.readyState === WebSocket.OPEN && name) { joiningStream = true; localStorage.setItem(userStorageKey, name); signal({ type: 'join', hostId: streamId, name }); } }
+$('displayName').oninput = () => { localStorage.setItem(userStorageKey, $('displayName').value.trim()); if (isViewer) joinCurrentStream(); };
 function createPeer(peerId) {
   const previous = peers.get(peerId); if (previous) previous.close();
   const connection = new RTCPeerConnection({ iceServers }); peers.set(peerId, connection);
@@ -51,14 +54,15 @@ function signal(message) { if (socket?.readyState === WebSocket.OPEN) socket.sen
 async function makeOffer(peerId) { const connection = createPeer(peerId); const offer = await connection.createOffer(); await connection.setLocalDescription(offer); signal({ type: 'offer', sdp: offer, to: peerId }); }
 function invalidate(message) {
   for (const connection of peers.values()) connection.close(); peers.clear(); peer = null; sessionId = null; joinedStream = false; joiningStream = false; localStream?.getTracks().forEach(track => track.stop()); localStream = null;
-  $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; $('presentingBadge').hidden = true; $('stopButton').hidden = true; $('changeScreenButton').hidden = true; $('fullscreenButton').hidden = true;
+  $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; $('presentingBadge').hidden = true; $('stopButton').hidden = true; $('changeScreenButton').hidden = true; $('fullscreenButton').hidden = true; $('watchingPanel').hidden = true;
   if (!isViewer) { isPresenter = false; setRoleStatus('TRANSMISSOR', 'NÃO ATIVO', false); $('shareButton').hidden = false; $('shareButton').disabled = false; $('shareButton').textContent = 'Compartilhar minha tela'; setLink(); }
   else setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false);
   status('Link expirado', 'warning'); stage(message);
 }
 async function receiveSignal(message) {
   if (message.type === 'online-streams') { renderOnline(message.streams); if (isViewer) joinCurrentStream(); return; }
-  if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; setRoleStatus('TRANSMISSOR', 'ATIVO', true); $('stageTitle').textContent = 'Transmissão disponível'; setLink(); status('Transmissor ativo', 'connected'); stage('Seu link fixo está online para os receptores.'); return; }
+  if (message.type === 'watchers' && !isViewer) { $('watchingPanel').hidden = false; renderWatchers(message.viewers); return; }
+  if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; $('watchingPanel').hidden = false; renderWatchers([]); setRoleStatus('TRANSMISSOR', 'ATIVO', true); $('stageTitle').textContent = 'Transmissão disponível'; setLink(); status('Transmissor ativo', 'connected'); stage('Seu link fixo está online para os receptores.'); return; }
   if (message.type === 'joined') { joiningStream = false; joinedStream = true; setRoleStatus('RECEPTOR', 'DISPONÍVEL', true); status('Receptor disponível', 'connected'); return; }
   if (message.type === 'peer-joined' && isPresenter) { status(`${message.viewers} receptor(es) ativo(s)`, 'connected'); await makeOffer(message.peerId); }
   if (message.type === 'offer') { const connection = createPeer(message.from); await connection.setRemoteDescription(message.sdp); const answer = await connection.createAnswer(); await connection.setLocalDescription(answer); signal({ type: 'answer', sdp: answer, to: message.from }); for (const candidate of queuedCandidates.get(message.from) || []) await connection.addIceCandidate(candidate); queuedCandidates.delete(message.from); }
@@ -104,7 +108,7 @@ $('shareButton').onclick = async () => {
   try {
     const name = $('displayName').value.trim();
     if (!name) { $('displayName').focus(); stage('Informe seu nome de transmissão antes de iniciar.'); return; }
-    localStorage.setItem('apheliar-screen-display-name', name);
+    localStorage.setItem(userStorageKey, name);
     $('shareButton').disabled = true; $('shareButton').textContent = 'Preparando transmissão…';
     await signalReady;
     localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
