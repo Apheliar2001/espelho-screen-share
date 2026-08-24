@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Apheliar Screen">
   <defs>
     <linearGradient id="a" x1="14" y1="12" x2="82" y2="84" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#ff5a5a"/>
-      <stop offset="1" stop-color="#b9142f"/>
+      <stop stop-color="#b98aff"/>
+      <stop offset="1" stop-color="#6532a6"/>
     </linearGradient>
   </defs>
-  <rect width="96" height="96" rx="25" fill="#17231e"/>
+  <rect width="96" height="96" rx="25" fill="#281344"/>
   <path d="M21 30.5C21 25.3 25.3 21 30.5 21h35C70.7 21 75 25.3 75 30.5v25C75 60.7 70.7 65 65.5 65h-35C25.3 65 21 60.7 21 55.5z" fill="url(#a)"/>
-  <path d="M38 76h20M48 65v11" stroke="#f7fbf8" stroke-width="6" stroke-linecap="round"/>
+  <path d="M38 76h20M48 65v11" stroke="#f8f5fc" stroke-width="6" stroke-linecap="round"/>
   <path d="M34 44h28" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".94"/>
-  <circle cx="66" cy="31" r="7" fill="#d8ff63" stroke="#17231e" stroke-width="3"/>
+  <circle cx="66" cy="31" r="7" fill="#e9dcff" stroke="#281344" stroke-width="3"/>
 </svg>
