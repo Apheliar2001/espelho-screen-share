@@ -14,7 +14,7 @@ let signalReady;
 if (isViewer) {
   document.body.classList.add('viewer-mode'); setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false);
   $('eyebrow').textContent = 'RECEPTOR'; $('heroTitle').innerHTML = 'A transmissão<br /><em>vai começar.</em>'; $('intro').textContent = 'Você está na sala de visualização. A imagem aparecerá assim que o transmissor estiver disponível.';
-  $('displayName').value = localStorage.getItem(userStorageKey) || ''; $('shareButton').hidden = true; $('joinViewerButton').hidden = false; $('joinViewerButton').disabled = !$('displayName').value.trim(); $('stopButton').hidden = true; $('roomLink').textContent = 'Você está acessando um link fixo de transmissão.'; $('copyButton').hidden = true;
+  $('displayName').value = localStorage.getItem(userStorageKey) || ''; $('shareButton').hidden = true; $('viewerActions').hidden = false; $('joinViewerButton').disabled = !$('displayName').value.trim(); $('stopButton').hidden = true; $('roomLink').textContent = 'Você está acessando um link fixo de transmissão.'; $('copyButton').hidden = true;
   stage('Informe seu usuário para entrar na transmissão.');
 } else {
   $('displayName').value = localStorage.getItem(userStorageKey) || '';
@@ -34,6 +34,7 @@ function renderWatchers(viewers) { const list = $('watcherList'); list.replaceCh
 function joinCurrentStream() { const name = $('displayName').value.trim(); if (isViewer && viewerAuthorized && !joinedStream && !joiningStream && socket?.readyState === WebSocket.OPEN && name) { joiningStream = true; localStorage.setItem(userStorageKey, name); signal({ type: 'join', hostId: streamId, name }); } }
 $('displayName').oninput = () => { const name = $('displayName').value.trim(); localStorage.setItem(userStorageKey, name); if (isViewer) $('joinViewerButton').disabled = !name; };
 $('joinViewerButton').onclick = () => { const name = $('displayName').value.trim(); if (!name) { $('displayName').focus(); return; } viewerAuthorized = true; $('joinViewerButton').disabled = true; $('joinViewerButton').textContent = 'Entrando…'; stage('Solicitando entrada como ' + name + '…'); joinCurrentStream(); };
+$('openBroadcastButton').onclick = () => window.open(`${location.origin}${location.pathname}`, '_blank', 'noopener');
 function createPeer(peerId) {
   const previous = peers.get(peerId); if (previous) previous.close();
   const connection = new RTCPeerConnection({ iceServers }); peers.set(peerId, connection);
