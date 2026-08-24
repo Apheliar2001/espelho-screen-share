@@ -18,6 +18,11 @@
         <h1 id="heroTitle">Sua tela.<br /><em>Seu controle.</em></h1>
         <p id="intro" class="intro">Inicie uma sessão privada e compartilhe o acesso com quem você escolher.</p>
       </section>
+      <section id="identityBox" class="identity-box">
+        <label for="displayName">Seu nome de transmissão</label>
+        <input id="displayName" maxlength="36" autocomplete="name" placeholder="Ex.: Joe" />
+        <p>Este nome aparecerá na lista de transmissões online.</p>
+      </section>
       <section class="stage">
         <div id="emptyState" class="empty-state">
           <div class="screen-icon">▭</div>
@@ -36,8 +41,12 @@
           <button id="unmuteButton" class="secondary" hidden>Ativar som</button>
           <button id="fullscreenButton" class="secondary" hidden>Tela cheia</button>
         </div>
-        <p class="hint">Cada sessão cria um novo acesso e encerra o anterior.</p>
+        <p class="hint">Seu link é fixo e pode ser usado em todas as suas transmissões.</p>
       </section>
+      <aside class="online-panel" aria-label="Transmissões online">
+        <p class="eyebrow">ONLINE AGORA</p>
+        <ul id="onlineList" class="online-list"><li>Nenhuma transmissão ativa.</li></ul>
+      </aside>
       <footer>Criado por Luiz Carlos</footer>
     </main>
     <script src="app.js"></script>
