@@ -3,26 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Espelho — Compartilhe sua tela</title>
+    <title>Apheliar Screen</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <main class="shell">
       <header>
-        <div class="brand"><span class="mark">◫</span> espelho</div>
+        <div class="brand"><span class="mark">◫</span> Apheliar Screen</div>
         <span id="connectionStatus" class="status neutral">Conectando ao servidor</span>
       </header>
       <section class="hero">
-        <div id="roleBanner" class="role-banner">PREPARANDO CONEXÃO</div>
-        <p class="eyebrow">TRANSMISSÃO PRIVADA 1:1</p>
-        <h1>Mostre sua tela,<br /><em>sem instalar nada.</em></h1>
-        <p class="intro">Envie o link da sala. A imagem é transmitida diretamente entre os navegadores.</p>
+        <div id="roleBanner" class="role-banner">CONECTANDO</div>
+        <p id="eyebrow" class="eyebrow">TRANSMISSOR</p>
+        <h1 id="heroTitle">Sua tela.<br /><em>Seu controle.</em></h1>
+        <p id="intro" class="intro">Inicie uma sessão privada e compartilhe o acesso com quem você escolher.</p>
       </section>
       <section class="stage">
         <div id="emptyState" class="empty-state">
           <div class="screen-icon">▭</div>
-          <h2>Aguardando transmissão</h2>
-          <p id="stageMessage">Inicie uma transmissão para gerar um link de acesso.</p>
+          <h2 id="stageTitle">Preparando sua sala</h2>
+          <p id="stageMessage">Aguarde a conexão com o serviço.</p>
         </div>
         <video id="remoteVideo" autoplay playsinline></video>
         <div id="presentingBadge" class="presenting-badge" hidden>● Você está transmitindo</div>
@@ -33,9 +33,11 @@
           <button id="shareButton" class="primary" disabled>Compartilhar minha tela</button>
           <button id="stopButton" class="danger" hidden>Parar transmissão</button>
           <button id="unmuteButton" class="secondary" hidden>Ativar som</button>
+          <button id="fullscreenButton" class="secondary" hidden>Tela cheia</button>
         </div>
-        <p class="hint">Cada nova transmissão substitui a anterior e invalida seu link. Use Chrome, Edge ou Firefox atualizado.</p>
+        <p class="hint">Cada sessão cria um novo acesso e encerra o anterior.</p>
       </section>
+      <footer>Criado por Luiz Carlos</footer>
     </main>
     <script src="app.js"></script>
   </body>
