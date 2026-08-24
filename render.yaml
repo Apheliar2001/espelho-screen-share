@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: espelho-screen-share
+    name: apheliar-screen
     runtime: node
     plan: free
     buildCommand: npm install
