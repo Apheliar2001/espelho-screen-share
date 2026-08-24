@@ -6,6 +6,7 @@ let socket, peer, localStream, queuedCandidates = [], sessionId = session, isPre
 let signalReady;
 
 if (isViewer) {
+  $('roleBanner').textContent = 'MODO ESPECTADOR'; $('roleBanner').classList.add('viewer');
   $('shareButton').hidden = true; $('stopButton').hidden = true; $('roomLink').textContent = 'Você está acessando uma transmissão privada.'; $('copyButton').hidden = true;
   stage('Validando o link de acesso…');
 }
@@ -45,7 +46,7 @@ function connectSignal() {
   signalReady = new Promise((resolve, reject) => {
     socket.onopen = () => {
       if (isViewer) signal({ type: 'join', room: sessionId });
-      else { $('shareButton').disabled = false; status('Pronto para transmitir', 'connected'); stage('Clique em compartilhar para gerar um link de acesso temporário.'); }
+      else { $('roleBanner').textContent = 'MODO TRANSMISSOR'; $('roleBanner').classList.add('presenter'); $('shareButton').disabled = false; status('Pronto para transmitir', 'connected'); stage('Clique em compartilhar para gerar um link de acesso temporário.'); }
       resolve();
     };
     socket.onerror = () => reject(new Error('Não foi possível conectar ao servidor.'));
