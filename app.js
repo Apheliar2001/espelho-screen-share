@@ -6,7 +6,7 @@ const hostStorageKey = 'apheliar-screen-host-id';
 const userStorageKey = 'apheliar-screen-user-name';
 const hostId = localStorage.getItem(hostStorageKey) || crypto.randomUUID().replaceAll('-', '');
 localStorage.setItem(hostStorageKey, hostId);
-let socket, peer, localStream, sessionId = null, isPresenter = false, sessionCreationTimer, joinedStream = false, joiningStream = false;
+let socket, peer, localStream, sessionId = null, isPresenter = false, sessionCreationTimer, joinedStream = false, joiningStream = false, viewerAuthorized = false;
 const peers = new Map();
 const queuedCandidates = new Map();
 let signalReady;
@@ -14,8 +14,8 @@ let signalReady;
 if (isViewer) {
   document.body.classList.add('viewer-mode'); setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false);
   $('eyebrow').textContent = 'RECEPTOR'; $('heroTitle').innerHTML = 'A transmissão<br /><em>vai começar.</em>'; $('intro').textContent = 'Você está na sala de visualização. A imagem aparecerá assim que o transmissor estiver disponível.';
-  $('displayName').value = localStorage.getItem(userStorageKey) || ''; $('shareButton').hidden = true; $('stopButton').hidden = true; $('roomLink').textContent = 'Você está acessando um link fixo de transmissão.'; $('copyButton').hidden = true;
-  stage('Aguardando esta transmissão ficar online…');
+  $('displayName').value = localStorage.getItem(userStorageKey) || ''; $('shareButton').hidden = true; $('joinViewerButton').hidden = false; $('joinViewerButton').disabled = !$('displayName').value.trim(); $('stopButton').hidden = true; $('roomLink').textContent = 'Você está acessando um link fixo de transmissão.'; $('copyButton').hidden = true;
+  stage('Informe seu usuário para entrar na transmissão.');
 } else {
   $('displayName').value = localStorage.getItem(userStorageKey) || '';
 }
@@ -31,8 +31,9 @@ function renderOnline(streams) {
   for (const stream of streams) { const item = document.createElement('li'); const link = document.createElement('a'); link.href = fixedLink(stream.id); link.target = '_blank'; link.rel = 'noopener'; link.textContent = stream.name; item.append(link); list.append(item); }
 }
 function renderWatchers(viewers) { const list = $('watcherList'); list.replaceChildren(); if (!viewers.length) { const item = document.createElement('li'); item.textContent = 'Ninguém assistindo.'; list.append(item); return; } for (const viewer of viewers) { const item = document.createElement('li'); item.textContent = viewer; list.append(item); } }
-function joinCurrentStream() { const name = $('displayName').value.trim(); if (isViewer && !joinedStream && !joiningStream && socket?.readyState === WebSocket.OPEN && name) { joiningStream = true; localStorage.setItem(userStorageKey, name); signal({ type: 'join', hostId: streamId, name }); } }
-$('displayName').oninput = () => { localStorage.setItem(userStorageKey, $('displayName').value.trim()); if (isViewer) joinCurrentStream(); };
+function joinCurrentStream() { const name = $('displayName').value.trim(); if (isViewer && viewerAuthorized && !joinedStream && !joiningStream && socket?.readyState === WebSocket.OPEN && name) { joiningStream = true; localStorage.setItem(userStorageKey, name); signal({ type: 'join', hostId: streamId, name }); } }
+$('displayName').oninput = () => { const name = $('displayName').value.trim(); localStorage.setItem(userStorageKey, name); if (isViewer) $('joinViewerButton').disabled = !name; };
+$('joinViewerButton').onclick = () => { const name = $('displayName').value.trim(); if (!name) { $('displayName').focus(); return; } viewerAuthorized = true; $('joinViewerButton').disabled = true; $('joinViewerButton').textContent = 'Entrando…'; stage('Solicitando entrada como ' + name + '…'); joinCurrentStream(); };
 function createPeer(peerId) {
   const previous = peers.get(peerId); if (previous) previous.close();
   const connection = new RTCPeerConnection({ iceServers }); peers.set(peerId, connection);
@@ -63,21 +64,21 @@ async function receiveSignal(message) {
   if (message.type === 'online-streams') { renderOnline(message.streams); if (isViewer) joinCurrentStream(); return; }
   if (message.type === 'watchers' && !isViewer) { $('watchingPanel').hidden = false; renderWatchers(message.viewers); return; }
   if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; $('watchingPanel').hidden = false; renderWatchers([]); setRoleStatus('TRANSMISSOR', 'ATIVO', true); $('stageTitle').textContent = 'Transmissão disponível'; setLink(); status('Transmissor ativo', 'connected'); stage('Seu link fixo está online para os receptores.'); return; }
-  if (message.type === 'joined') { joiningStream = false; joinedStream = true; setRoleStatus('RECEPTOR', 'DISPONÍVEL', true); status('Receptor disponível', 'connected'); return; }
+  if (message.type === 'joined') { joiningStream = false; joinedStream = true; $('joinViewerButton').hidden = true; setRoleStatus('RECEPTOR', 'DISPONÍVEL', true); status('Receptor disponível', 'connected'); return; }
   if (message.type === 'peer-joined' && isPresenter) { status(`${message.viewers} receptor(es) ativo(s)`, 'connected'); await makeOffer(message.peerId); }
   if (message.type === 'offer') { const connection = createPeer(message.from); await connection.setRemoteDescription(message.sdp); const answer = await connection.createAnswer(); await connection.setLocalDescription(answer); signal({ type: 'answer', sdp: answer, to: message.from }); for (const candidate of queuedCandidates.get(message.from) || []) await connection.addIceCandidate(candidate); queuedCandidates.delete(message.from); }
   if (message.type === 'answer') { const connection = peers.get(message.from); if (connection) { await connection.setRemoteDescription(message.sdp); for (const candidate of queuedCandidates.get(message.from) || []) await connection.addIceCandidate(candidate); queuedCandidates.delete(message.from); } }
   if (message.type === 'ice-candidate') { const connection = peers.get(message.from); if (connection?.remoteDescription) await connection.addIceCandidate(message.candidate); else queuedCandidates.set(message.from, [...(queuedCandidates.get(message.from) || []), message.candidate]); }
   if (message.type === 'peer-left') { peers.get(message.peerId)?.close(); peers.delete(message.peerId); status(isPresenter ? `${peers.size} receptor(es) ativo(s)` : 'Receptor não ativo', isPresenter ? 'connected' : 'error'); if (!isPresenter) { $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; setRoleStatus('RECEPTOR', 'NÃO ATIVO', false); stage('O transmissor saiu da sala.'); } }
   if (message.type === 'session-expired') invalidate('Esta transmissão foi encerrada. O mesmo link voltará a funcionar quando o transmissor iniciar novamente.');
-  if (message.type === 'stream-unavailable') { joiningStream = false; joinedStream = false; setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false); status('Receptor não disponível', 'error'); stage('Esta transmissão está offline. Aguarde o transmissor iniciar.'); }
+  if (message.type === 'stream-unavailable') { joiningStream = false; joinedStream = false; $('joinViewerButton').disabled = false; $('joinViewerButton').textContent = 'Entrar na transmissão'; setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false); status('Receptor não disponível', 'error'); stage('Esta transmissão está offline. Aguarde o transmissor iniciar.'); }
   if (message.type === 'room-full') invalidate('Esta transmissão já atingiu o limite de receptores.');
 }
 function connectSignal() {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws'; socket = new WebSocket(`${protocol}://${location.host}`);
   signalReady = new Promise((resolve, reject) => {
     socket.onopen = () => {
-      if (isViewer) joinCurrentStream();
+      if (isViewer) { if (viewerAuthorized) joinCurrentStream(); else status('Informe seu usuário para entrar', 'neutral'); }
       else { document.body.classList.add('presenter-mode'); setRoleStatus('TRANSMISSOR', 'DISPONÍVEL', true); setLink(); $('shareButton').disabled = false; status('Transmissor disponível', 'connected'); $('stageTitle').textContent = 'Sua sala está pronta'; stage('Inicie a transmissão para ficar online com seu link fixo.'); }
       resolve();
     };
