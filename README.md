@@ -1,4 +1,4 @@
-# Espelho — protótipo de compartilhamento de tela
+# Apheliar Screen — compartilhamento de tela
 
 ## Executar localmente
 
@@ -12,4 +12,4 @@ Como alternativa, no diretório deste projeto, execute `npm start` e acesse `htt
 
 Hospede o projeto em um servidor Node com HTTPS e defina `PORT` se necessário. Para conexões confiáveis entre redes diferentes, configure um TURN (por exemplo, coturn) e substitua a constante `iceServers` em `public/app.js` pelas credenciais do seu serviço TURN.
 
-Cada nova transmissão gera um token aleatório e invalida automaticamente o link anterior. Este é um protótipo 1:1: cada sessão suporta somente um transmissor e um espectador.
+Cada nova transmissão gera um token aleatório e invalida automaticamente o link anterior. Cada sessão suporta um transmissor e até 10 espectadores simultâneos. Como a imagem é enviada diretamente pelo navegador do transmissor, a qualidade para todos depende principalmente da conexão de upload dele.
