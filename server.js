@@ -34,7 +34,7 @@ function expireActiveSession() {
 const server = http.createServer((req, res) => {
   const rawPath = decodeURIComponent(req.url.split('?')[0]);
   const requested = rawPath === '/' ? '/index.html' : rawPath;
-  if (!['/index.html', '/style.css', '/app.js'].includes(requested)) { res.writeHead(404); res.end('Not found'); return; }
+  if (!['/index.html', '/style.css', '/app.js', '/logo.svg'].includes(requested)) { res.writeHead(404); res.end('Not found'); return; }
   const filePath = path.join(rootDir, requested);
   fs.readFile(filePath, (error, data) => {
     if (!error) return respond(res, filePath, data);
@@ -45,7 +45,7 @@ const server = http.createServer((req, res) => {
   });
 });
 function respond(res, filePath, data) {
-  const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8' };
+  const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
   res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream' }); res.end(data);
 }
 
