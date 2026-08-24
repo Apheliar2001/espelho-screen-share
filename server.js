@@ -9,6 +9,7 @@ const rootDir = __dirname;
 const developmentAssetsDir = path.join(__dirname, 'public');
 const rooms = new Map();
 let activeSession = null;
+const maxViewers = 10;
 
 function send(socket, message) {
   if (socket.readyState === 1) socket.send(JSON.stringify(message));
@@ -19,7 +20,7 @@ function broadcast(roomId, sender, message) {
 function removeClient(socket) {
   for (const [roomId, clients] of rooms) {
     if (!clients.delete(socket)) continue;
-    broadcast(roomId, socket, { type: 'peer-left' });
+    broadcast(roomId, socket, { type: 'peer-left', peerId: socket.id });
     if (clients.size === 0) rooms.delete(roomId);
     break;
   }
@@ -54,6 +55,7 @@ server.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
 });
 wss.on('connection', (socket) => {
+  socket.id = crypto.randomBytes(9).toString('base64url');
   socket.on('message', (raw) => {
     try {
       const message = JSON.parse(raw.toString());
@@ -67,11 +69,14 @@ wss.on('connection', (socket) => {
       } else if (message.type === 'join' && /^[a-zA-Z0-9_-]{12,64}$/.test(message.room)) {
         if (message.room !== activeSession) { send(socket, { type: 'invalid-session' }); socket.close(); return; }
         const clients = rooms.get(message.room);
-        if (clients.size >= 2) { send(socket, { type: 'room-full' }); socket.close(); return; }
+        if (clients.size - 1 >= maxViewers) { send(socket, { type: 'room-full' }); socket.close(); return; }
         socket.room = message.room; clients.add(socket);
-        send(socket, { type: 'joined', peers: clients.size - 1 }); broadcast(socket.room, socket, { type: 'peer-joined' });
+        const host = [...clients].find((client) => client.isHost);
+        send(socket, { type: 'joined', peers: clients.size - 1, hostId: host?.id });
+        if (host) send(host, { type: 'peer-joined', peerId: socket.id, viewers: clients.size - 1 });
       } else if (socket.room === activeSession && ['offer', 'answer', 'ice-candidate'].includes(message.type)) {
-        broadcast(socket.room, socket, message);
+        const target = [...(rooms.get(socket.room) || [])].find((client) => client.id === message.to);
+        if (target) send(target, { ...message, from: socket.id });
       }
     } catch { /* Ignore invalid WebSocket payloads. */ }
   });
