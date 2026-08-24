@@ -43,7 +43,11 @@ async function receiveSignal(message) {
 function connectSignal() {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws'; socket = new WebSocket(`${protocol}://${location.host}`);
   signalReady = new Promise((resolve, reject) => {
-    socket.onopen = () => { if (isViewer) signal({ type: 'join', room: sessionId }); resolve(); };
+    socket.onopen = () => {
+      if (isViewer) signal({ type: 'join', room: sessionId });
+      else { $('shareButton').disabled = false; status('Pronto para transmitir', 'connected'); stage('Clique em compartilhar para gerar um link de acesso temporário.'); }
+      resolve();
+    };
     socket.onerror = () => reject(new Error('Não foi possível conectar ao servidor.'));
   });
   socket.onmessage = async (event) => { try { await receiveSignal(JSON.parse(event.data)); } catch (error) { console.error(error); status('Falha na conexão', 'error'); } };
