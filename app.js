@@ -21,7 +21,7 @@ function createPeer() {
     const video = $('remoteVideo');
     video.muted = true;
     video.srcObject = streams[0];
-    video.classList.add('active'); $('emptyState').hidden = true; $('roleBanner').classList.add('watching');
+    video.classList.add('active'); $('emptyState').hidden = true; $('roleBanner').classList.add('watching'); $('unmuteButton').hidden = false;
     video.play().catch(() => { video.onloadedmetadata = () => video.play().catch(() => {}); });
     status('Assistindo à transmissão', 'connected');
   };
@@ -78,4 +78,5 @@ $('shareButton').onclick = async () => {
 };
 function stopSharing() { clearTimeout(sessionCreationTimer); if (sessionId) signal({ type: 'end-session' }); else invalidate('A transmissão foi encerrada.'); }
 $('stopButton').onclick = stopSharing;
+$('unmuteButton').onclick = async () => { const video = $('remoteVideo'); video.muted = false; await video.play(); $('unmuteButton').hidden = true; };
 connectSignal();
