@@ -19,17 +19,19 @@
         <p id="intro" class="intro">Inicie uma sessão privada e compartilhe o acesso com quem você escolher.</p>
       </section>
       <section id="identityBox" class="identity-box">
-        <label for="displayName">Usuário</label>
-        <input id="displayName" maxlength="36" autocomplete="name" placeholder="Luix" />
-        <p>Este nome identifica você nas transmissões e na lista online.</p>
-      </section>
-      <section class="stage">
+        <div class="identity-content">
+          <label for="displayName">Usuário</label>
+          <input id="displayName" maxlength="36" autocomplete="name" placeholder="Luix" />
+          <p>Este nome identifica você nas transmissões e na lista online.</p>
+        </div>
         <div id="viewerActions" class="viewer-actions" hidden>
           <button id="joinViewerButton" class="primary" disabled>Entrar na transmissão</button>
           <button id="unmuteButton" class="secondary" hidden>Ativar som</button>
           <button id="fullscreenButton" class="secondary" hidden>Tela cheia</button>
           <button id="openBroadcastButton" class="secondary">Abrir minha transmissão</button>
         </div>
+      </section>
+      <section class="stage">
         <div id="emptyState" class="empty-state">
           <div class="screen-icon">▭</div>
           <h2 id="stageTitle">Preparando sua sala</h2>
