@@ -4,9 +4,12 @@ const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
 const isViewer = Boolean(streamId);
 const hostStorageKey = 'apheliar-screen-host-id';
 const userStorageKey = 'apheliar-screen-user-name';
+const clientStorageKey = 'apheliar-screen-client-id';
 const hostId = localStorage.getItem(hostStorageKey) || crypto.randomUUID().replaceAll('-', '');
 localStorage.setItem(hostStorageKey, hostId);
-let socket, peer, localStream, sessionId = null, isPresenter = false, sessionCreationTimer, joinedStream = false, joiningStream = false, viewerAuthorized = false;
+const clientId = localStorage.getItem(clientStorageKey) || crypto.randomUUID().replaceAll('-', '');
+localStorage.setItem(clientStorageKey, clientId);
+let socket, peer, localStream, sessionId = null, isPresenter = false, sessionCreationTimer, joinedStream = false, joiningStream = false, viewerAuthorized = false, livekitRoom, livekitSdk;
 const peers = new Map();
 const queuedCandidates = new Map();
 let signalReady;
@@ -37,6 +40,24 @@ async function prioritizeMotion(sender) {
     if (parameters.encodings?.length) { parameters.encodings[0].maxBitrate = 5_000_000; parameters.encodings[0].maxFramerate = 60; }
     await sender.setParameters(parameters);
   } catch { /* Browser does not support changing these WebRTC preferences. */ }
+}
+async function connectLiveKit(role) {
+  const response = await fetch('/api/livekit-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hostId: isViewer ? streamId : hostId, name: $('displayName').value.trim(), clientId, role }) });
+  if (!response.ok) throw new Error('LiveKit token unavailable');
+  const credentials = await response.json();
+  livekitSdk ||= await import('https://cdn.jsdelivr.net/npm/livekit-client@2.15.0/+esm');
+  livekitRoom?.disconnect();
+  livekitRoom = new livekitSdk.Room({ adaptiveStream: true, dynacast: true });
+  livekitRoom.on(livekitSdk.RoomEvent.TrackSubscribed, (track) => {
+    if (track.kind === livekitSdk.Track.Kind.Video) { track.attach($('remoteVideo')); $('remoteVideo').classList.add('active'); $('emptyState').hidden = true; setRoleStatus('RECEPTOR', 'ATIVO', true); $('fullscreenButton').hidden = false; }
+    if (track.kind === livekitSdk.Track.Kind.Audio) { track.attach($('remoteAudio')); $('unmuteButton').hidden = false; }
+  });
+  await livekitRoom.connect(credentials.url, credentials.token);
+  if (role === 'host') {
+    const video = localStream.getVideoTracks()[0]; const audio = localStream.getAudioTracks()[0];
+    if (video) await livekitRoom.localParticipant.publishTrack(video, { source: livekitSdk.Track.Source.ScreenShare, videoEncoding: { maxBitrate: 5_000_000, maxFramerate: 60 } });
+    if (audio) await livekitRoom.localParticipant.publishTrack(audio, { source: livekitSdk.Track.Source.ScreenShareAudio });
+  }
 }
 function setRoleStatus(role, state, positive) { const banner = $('roleBanner'); banner.textContent = `${role} · ${state}`; banner.className = `role-banner ${positive ? 'positive' : 'negative'}`; }
 function fixedLink(id = hostId) { return `${location.origin}${location.pathname}?stream=${id}`; }
@@ -80,7 +101,7 @@ function createPeer(peerId) {
 function signal(message) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
 async function makeOffer(peerId) { const connection = createPeer(peerId); const offer = await connection.createOffer(); await connection.setLocalDescription(offer); signal({ type: 'offer', sdp: offer, to: peerId }); }
 function invalidate(message) {
-  for (const connection of peers.values()) connection.close(); peers.clear(); peer = null; sessionId = null; joinedStream = false; joiningStream = false; localStream?.getTracks().forEach(track => track.stop()); localStream = null;
+  livekitRoom?.disconnect(); livekitRoom = null; for (const connection of peers.values()) connection.close(); peers.clear(); peer = null; sessionId = null; joinedStream = false; joiningStream = false; localStream?.getTracks().forEach(track => track.stop()); localStream = null;
   $('remoteVideo').classList.remove('active'); $('emptyState').hidden = false; $('presentingBadge').hidden = true; $('stopButton').hidden = true; $('changeScreenButton').hidden = true; $('fullscreenButton').hidden = true; $('watchingPanel').hidden = true;
   if (!isViewer) { isPresenter = false; setRoleStatus('TRANSMISSOR', 'NÃO ATIVO', false); $('shareButton').hidden = false; $('shareButton').disabled = false; $('shareButton').textContent = 'Compartilhar minha tela'; setLink(); }
   else setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false);
@@ -89,9 +110,9 @@ function invalidate(message) {
 async function receiveSignal(message) {
   if (message.type === 'online-streams') { renderOnline(message.streams); updateStreamOwner(message.streams); if (isViewer) joinCurrentStream(); return; }
   if (message.type === 'watchers' && !isViewer) { $('watchingPanel').hidden = false; renderWatchers(message.viewers); return; }
-  if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; $('watchingPanel').hidden = false; renderWatchers([]); setRoleStatus('TRANSMISSOR', 'ATIVO', true); $('stageTitle').textContent = 'Transmissão disponível'; setLink(); status('Transmissor ativo', 'connected'); stage('Seu link fixo está online para os receptores.'); return; }
-  if (message.type === 'joined') { joiningStream = false; joinedStream = true; $('joinViewerButton').hidden = true; setRoleStatus('RECEPTOR', 'DISPONÍVEL', true); status('Receptor disponível', 'connected'); return; }
-  if (message.type === 'peer-joined' && isPresenter) { status(`${message.viewers} receptor(es) ativo(s)`, 'connected'); await makeOffer(message.peerId); }
+  if (message.type === 'session-created') { clearTimeout(sessionCreationTimer); sessionId = message.room; isPresenter = true; $('watchingPanel').hidden = false; renderWatchers([]); setRoleStatus('TRANSMISSOR', 'ATIVO', true); $('stageTitle').textContent = 'Transmissão disponível'; setLink(); status('Conectando à mídia', 'neutral'); stage('Preparando a transmissão pelo LiveKit.'); try { await connectLiveKit('host'); status('Transmissor ativo', 'connected'); stage('Seu link fixo está online para os receptores.'); } catch { invalidate('Não foi possível conectar à infraestrutura de mídia. Tente novamente.'); } return; }
+  if (message.type === 'joined') { joiningStream = false; joinedStream = true; $('joinViewerButton').hidden = true; setRoleStatus('RECEPTOR', 'DISPONÍVEL', true); status('Conectando à mídia', 'neutral'); try { await connectLiveKit('viewer'); status('Receptor disponível', 'connected'); } catch { invalidate('Não foi possível conectar à infraestrutura de mídia.'); } return; }
+  if (message.type === 'peer-joined' && isPresenter) { status(`${message.viewers} receptor(es) ativo(s)`, 'connected'); return; }
   if (message.type === 'offer') { const connection = createPeer(message.from); await connection.setRemoteDescription(message.sdp); const answer = await connection.createAnswer(); await connection.setLocalDescription(answer); signal({ type: 'answer', sdp: answer, to: message.from }); for (const candidate of queuedCandidates.get(message.from) || []) await connection.addIceCandidate(candidate); queuedCandidates.delete(message.from); }
   if (message.type === 'answer') { const connection = peers.get(message.from); if (connection) { await connection.setRemoteDescription(message.sdp); for (const candidate of queuedCandidates.get(message.from) || []) await connection.addIceCandidate(candidate); queuedCandidates.delete(message.from); } }
   if (message.type === 'ice-candidate') { const connection = peers.get(message.from); if (connection?.remoteDescription) await connection.addIceCandidate(message.candidate); else queuedCandidates.set(message.from, [...(queuedCandidates.get(message.from) || []), message.candidate]); }
@@ -118,15 +139,14 @@ $('changeScreenButton').onclick = async () => {
     const selectedStream = await navigator.mediaDevices.getDisplayMedia(captureOptions);
     const newVideo = selectedStream.getVideoTracks()[0];
     if (!newVideo) return;
-    for (const connection of peers.values()) {
-      const sender = connection.getSenders().find((item) => item.track?.kind === 'video');
-      await sender?.replaceTrack(newVideo);
-    }
+    const oldPublication = livekitRoom?.localParticipant.getTrackPublication(livekitSdk?.Track.Source.ScreenShare);
+    if (oldPublication) await livekitRoom.localParticipant.unpublishTrack(oldPublication.track);
     const previousVideo = localStream?.getVideoTracks()[0];
     const previousAudio = localStream?.getAudioTracks() || [];
     selectedStream.getAudioTracks().forEach((track) => track.stop());
     localStream = new MediaStream([newVideo, ...previousAudio]);
     reportCapture(localStream);
+    if (livekitRoom) await livekitRoom.localParticipant.publishTrack(newVideo, { source: livekitSdk.Track.Source.ScreenShare, videoEncoding: { maxBitrate: 5_000_000, maxFramerate: 60 } });
     newVideo.onended = () => { if (localStream?.getVideoTracks()[0] === newVideo) stopSharing(); };
     previousVideo?.stop();
     stage('Tela/janela alterada com sucesso.');
@@ -153,6 +173,6 @@ $('shareButton').onclick = async () => {
 };
 function stopSharing() { clearTimeout(sessionCreationTimer); if (isPresenter) signal({ type: 'end-session' }); else invalidate('A transmissão foi encerrada.'); }
 $('stopButton').onclick = stopSharing;
-$('unmuteButton').onclick = async () => { const video = $('remoteVideo'); video.muted = false; await video.play(); $('unmuteButton').hidden = true; };
+$('unmuteButton').onclick = async () => { const video = $('remoteVideo'); video.muted = false; $('remoteAudio').muted = false; await Promise.allSettled([video.play(), $('remoteAudio').play()]); $('unmuteButton').hidden = true; };
 $('fullscreenButton').onclick = () => $('remoteVideo').requestFullscreen?.();
 connectSignal();
