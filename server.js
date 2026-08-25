@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { WebSocketServer } = require('ws');
+const { AccessToken } = require('livekit-server-sdk');
 
 const port = Number(process.env.PORT || 3000);
 const rootDir = __dirname;
@@ -37,8 +38,21 @@ function removeClient(socket) {
   }
 }
 
-const server = http.createServer((req, res) => {
+function json(res, status, body) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(body)); }
+function readJson(req) { return new Promise((resolve, reject) => { let body = ''; req.on('data', (chunk) => { body += chunk; if (body.length > 20_000) reject(new Error('Request too large')); }); req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { reject(new Error('Invalid JSON')); } }); req.on('error', reject); }); }
+async function liveKitToken(req, res) {
+  const { hostId, name, clientId, role } = await readJson(req);
+  const stream = streams.get(hostId);
+  if (!stream) return json(res, 404, { error: 'stream-unavailable' });
+  if (!process.env.LIVEKIT_URL || !process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET) return json(res, 503, { error: 'livekit-not-configured' });
+  const identity = role === 'host' ? `host-${hostId}` : `viewer-${clientId}`;
+  const token = new AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, { identity, name: String(name || 'Usuário').slice(0, 36) });
+  token.addGrant({ roomJoin: true, room: stream.room, canPublish: role === 'host', canSubscribe: true, canPublishData: true });
+  return json(res, 200, { token: await token.toJwt(), url: process.env.LIVEKIT_URL, room: stream.room });
+}
+const server = http.createServer(async (req, res) => {
   const rawPath = decodeURIComponent(req.url.split('?')[0]);
+  if (req.method === 'POST' && rawPath === '/api/livekit-token') { try { return await liveKitToken(req, res); } catch { return json(res, 400, { error: 'invalid-request' }); } }
   const requested = rawPath === '/' ? '/index.html' : rawPath;
   if (!['/index.html', '/style.css', '/app.js', '/logo.svg'].includes(requested)) { res.writeHead(404); res.end('Not found'); return; }
   const filePath = path.join(rootDir, requested);
