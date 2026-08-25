@@ -10,6 +10,7 @@ let socket, peer, localStream, sessionId = null, isPresenter = false, sessionCre
 const peers = new Map();
 const queuedCandidates = new Map();
 let signalReady;
+const captureOptions = { video: { frameRate: { ideal: 60, max: 60 }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: { suppressLocalAudioPlayback: false }, systemAudio: 'include', surfaceSwitching: 'include' };
 
 if (isViewer) {
   document.body.classList.add('viewer-mode'); setRoleStatus('RECEPTOR', 'NÃO DISPONÍVEL', false);
@@ -22,6 +23,21 @@ if (isViewer) {
 $('copyButton').onclick = async () => { await navigator.clipboard.writeText($('roomLink').textContent); $('copyButton').textContent = 'Copiado!'; setTimeout(() => $('copyButton').textContent = 'Copiar link', 1600); };
 function status(text, variant = 'neutral') { const el = $('connectionStatus'); el.textContent = text; el.className = `status ${variant}`; }
 function stage(text) { $('stageMessage').textContent = text; }
+function reportCapture(stream) {
+  const video = stream.getVideoTracks()[0]; const audio = stream.getAudioTracks()[0];
+  if (video && 'contentHint' in video) video.contentHint = 'motion';
+  const settings = video?.getSettings?.() || {};
+  const quality = settings.frameRate ? `${Math.round(settings.frameRate)} FPS solicitados` : 'perfil de movimento ativo';
+  $('mediaStatus').textContent = audio ? `Áudio capturado · ${quality}` : `Áudio não foi capturado pelo navegador · ${quality}`;
+}
+async function prioritizeMotion(sender) {
+  try {
+    const parameters = sender.getParameters();
+    parameters.degradationPreference = 'maintain-framerate';
+    if (parameters.encodings?.length) { parameters.encodings[0].maxBitrate = 5_000_000; parameters.encodings[0].maxFramerate = 60; }
+    await sender.setParameters(parameters);
+  } catch { /* Browser does not support changing these WebRTC preferences. */ }
+}
 function setRoleStatus(role, state, positive) { const banner = $('roleBanner'); banner.textContent = `${role} · ${state}`; banner.className = `role-banner ${positive ? 'positive' : 'negative'}`; }
 function fixedLink(id = hostId) { return `${location.origin}${location.pathname}?stream=${id}`; }
 function setLink() { $('roomLink').textContent = fixedLink(); $('copyButton').disabled = false; }
@@ -58,7 +74,7 @@ function createPeer(peerId) {
     status('Receptor ativo', 'connected');
   };
   connection.onconnectionstatechange = () => { if (connection.connectionState === 'disconnected' || connection.connectionState === 'failed') status('Conexão interrompida', 'warning'); };
-  if (localStream) localStream.getTracks().forEach(track => connection.addTrack(track, localStream));
+  if (localStream) localStream.getTracks().forEach(track => { const sender = connection.addTrack(track, localStream); if (track.kind === 'video') prioritizeMotion(sender); });
   return connection;
 }
 function signal(message) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
@@ -99,7 +115,7 @@ function connectSignal() {
 }
 $('changeScreenButton').onclick = async () => {
   try {
-    const selectedStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    const selectedStream = await navigator.mediaDevices.getDisplayMedia(captureOptions);
     const newVideo = selectedStream.getVideoTracks()[0];
     if (!newVideo) return;
     for (const connection of peers.values()) {
@@ -110,6 +126,7 @@ $('changeScreenButton').onclick = async () => {
     const previousAudio = localStream?.getAudioTracks() || [];
     selectedStream.getAudioTracks().forEach((track) => track.stop());
     localStream = new MediaStream([newVideo, ...previousAudio]);
+    reportCapture(localStream);
     newVideo.onended = () => { if (localStream?.getVideoTracks()[0] === newVideo) stopSharing(); };
     previousVideo?.stop();
     stage('Tela/janela alterada com sucesso.');
@@ -122,7 +139,8 @@ $('shareButton').onclick = async () => {
     localStorage.setItem(userStorageKey, name);
     $('shareButton').disabled = true; $('shareButton').textContent = 'Preparando transmissão…';
     await signalReady;
-    localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    localStream = await navigator.mediaDevices.getDisplayMedia(captureOptions);
+    reportCapture(localStream);
     $('shareButton').hidden = true; $('changeScreenButton').hidden = false; $('stopButton').hidden = false; $('presentingBadge').hidden = false;
     const initialVideo = localStream.getVideoTracks()[0]; initialVideo.onended = () => { if (localStream?.getVideoTracks()[0] === initialVideo) stopSharing(); }; signal({ type: 'create-session', hostId, name });
     sessionCreationTimer = setTimeout(() => {
