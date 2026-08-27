@@ -50,9 +50,38 @@ async function liveKitToken(req, res) {
   token.addGrant({ roomJoin: true, room: stream.room, canPublish: role === 'host', canSubscribe: true, canPublishData: true });
   return json(res, 200, { token: await token.toJwt(), url: process.env.LIVEKIT_URL, room: stream.room });
 }
+async function nativeSession(req, res) {
+  const { hostId, name } = await readJson(req);
+  if (!/^[a-zA-Z0-9_-]{16,80}$/.test(hostId || '') || !String(name || '').trim()) {
+    return json(res, 400, { error: 'invalid-session' });
+  }
+  if (!process.env.LIVEKIT_URL || !process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET) {
+    return json(res, 503, { error: 'livekit-not-configured' });
+  }
+  endStream(hostId);
+  const room = crypto.randomBytes(18).toString('base64url');
+  const displayName = String(name).trim().slice(0, 36);
+  streams.set(hostId, { room, name: displayName, native: true });
+  rooms.set(room, new Set());
+  const token = new AccessToken(process.env.LIVEKIT_API_KEY, process.env.LIVEKIT_API_SECRET, {
+    identity: `host-${hostId}`, name: displayName
+  });
+  token.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true, canPublishData: true });
+  publishOnlineStreams();
+  return json(res, 200, {
+    hostId, room, name: displayName, url: process.env.LIVEKIT_URL, token: await token.toJwt()
+  });
+}
+async function nativeEndSession(req, res) {
+  const { hostId } = await readJson(req);
+  if (hostId) endStream(hostId);
+  return json(res, 200, { ok: true });
+}
 const server = http.createServer(async (req, res) => {
   const rawPath = decodeURIComponent(req.url.split('?')[0]);
   if (req.method === 'POST' && rawPath === '/api/livekit-token') { try { return await liveKitToken(req, res); } catch { return json(res, 400, { error: 'invalid-request' }); } }
+  if (req.method === 'POST' && rawPath === '/api/native-session') { try { return await nativeSession(req, res); } catch { return json(res, 400, { error: 'invalid-request' }); } }
+  if (req.method === 'POST' && rawPath === '/api/native-end-session') { try { return await nativeEndSession(req, res); } catch { return json(res, 400, { error: 'invalid-request' }); } }
   const requested = rawPath === '/' ? '/index.html' : rawPath;
   if (!['/index.html', '/style.css', '/app.js', '/logo.svg'].includes(requested)) { res.writeHead(404); res.end('Not found'); return; }
   const filePath = path.join(rootDir, requested);
